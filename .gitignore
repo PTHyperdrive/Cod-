@@ -1,0 +1,91 @@
+# =============================================================================
+# Codé — .gitignore
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Build output
+# ---------------------------------------------------------------------------
+build/
+*.o
+*.obj
+*.a
+*.lib
+*.exe
+*.out
+*.elf
+
+# ---------------------------------------------------------------------------
+# Go
+# ---------------------------------------------------------------------------
+# Binaries
+server/serverd
+console/console
+*.test
+
+# Module cache (when using vendor mode, vendor/ is committed)
+# vendor/  — intentionally not ignored; agent/vendor/mbedtls is committed
+
+# Go workspace files
+go.work
+go.work.sum
+
+# ---------------------------------------------------------------------------
+# C / Agent
+# ---------------------------------------------------------------------------
+# Object files and intermediates
+agent/obj/
+agent/*.d
+agent/*.map
+
+# Generated config header
+agent/include/code_config.h
+
+# ---------------------------------------------------------------------------
+# TLS Certificates (never commit private keys)
+# ---------------------------------------------------------------------------
+certs/*.pem
+certs/*.key
+certs/*.crt
+certs/*.csr
+certs/*.srl
+certs/*.p12
+certs/ca/
+certs/server/
+certs/client/
+!certs/generate_certs.sh
+!certs/README.md
+
+# ---------------------------------------------------------------------------
+# IDE / Editor
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.*.kate-swp
+*.sublime-project
+*.sublime-workspace
+.project
+.cproject
+.settings/
+compile_commands.json
+
+# ---------------------------------------------------------------------------
+# OS artifacts
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.lnk
+
+# ---------------------------------------------------------------------------
+# Misc
+# ---------------------------------------------------------------------------
+*.log
+*.tmp
+*.bak
+*.orig
+core
+core.*
+*.dmp

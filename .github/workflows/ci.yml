@@ -1,0 +1,265 @@
+# =============================================================================
+# Codé — GitHub Actions CI Pipeline
+# =============================================================================
+#
+# This workflow builds and tests all components:
+#   - Team Server (Go)
+#   - Operator Console (Go)
+#   - Agent (C99) for all 7 platform/arch targets
+#   - TLV codec unit tests
+#   - ARM targets via QEMU user-mode emulation
+#
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  GO_VERSION: "1.22"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Go components: Team Server + Operator Console
+  # ---------------------------------------------------------------------------
+  go-build:
+    name: "Go Build & Test"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build Team Server
+        run: |
+          cd server
+          go build -v ./...
+
+      - name: Build Operator Console
+        run: |
+          cd console
+          go build -v ./...
+
+      - name: Test Team Server
+        run: |
+          cd server
+          go test -v -race -count=1 ./...
+
+      - name: Test Operator Console
+        run: |
+          cd console
+          go test -v -race -count=1 ./...
+
+      - name: Upload server binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-linux-amd64
+          path: server/
+          retention-days: 7
+
+      - name: Upload console binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: console-linux-amd64
+          path: console/
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Agent: cross-compilation build matrix
+  # ---------------------------------------------------------------------------
+  agent-build:
+    name: "Agent (${{ matrix.os }}-${{ matrix.arch }})"
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux targets (musl for static linking)
+          - os: linux
+            arch: i386
+            cc: i686-linux-musl-gcc
+            toolchain_pkg: musl-tools
+            musl_cross: i686-linux-musl-cross
+            binary: code_agent
+            qemu: ""
+
+          - os: linux
+            arch: amd64
+            cc: x86_64-linux-musl-gcc
+            toolchain_pkg: musl-tools
+            musl_cross: x86_64-linux-musl-cross
+            binary: code_agent
+            qemu: ""
+
+          - os: linux
+            arch: armv7
+            cc: arm-linux-musleabihf-gcc
+            toolchain_pkg: ""
+            musl_cross: arm-linux-musleabihf-cross
+            binary: code_agent
+            qemu: qemu-arm
+
+          - os: linux
+            arch: aarch64
+            cc: aarch64-linux-musl-gcc
+            toolchain_pkg: ""
+            musl_cross: aarch64-linux-musl-cross
+            binary: code_agent
+            qemu: qemu-aarch64
+
+          # Windows targets (MinGW-w64)
+          - os: windows
+            arch: i386
+            cc: i686-w64-mingw32-gcc
+            toolchain_pkg: gcc-mingw-w64-i686
+            musl_cross: ""
+            binary: code_agent.exe
+            qemu: ""
+
+          - os: windows
+            arch: amd64
+            cc: x86_64-w64-mingw32-gcc
+            toolchain_pkg: gcc-mingw-w64-x86-64
+            musl_cross: ""
+            binary: code_agent.exe
+            qemu: ""
+
+          - os: windows
+            arch: aarch64
+            cc: aarch64-w64-mingw32-gcc
+            toolchain_pkg: ""
+            musl_cross: ""
+            binary: code_agent.exe
+            qemu: ""
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --- Toolchain installation ---
+
+      - name: Install system packages
+        if: matrix.toolchain_pkg != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.toolchain_pkg }}
+
+      - name: Install musl cross-compiler
+        if: matrix.musl_cross != ''
+        run: |
+          MUSL_VERSION="11"
+          MUSL_URL="https://musl.cc/${{ matrix.musl_cross }}.tgz"
+          echo "Downloading $MUSL_URL ..."
+          wget -q "$MUSL_URL" -O /tmp/musl-cross.tgz
+          sudo tar xzf /tmp/musl-cross.tgz -C /opt/
+          echo "/opt/${{ matrix.musl_cross }}/bin" >> $GITHUB_PATH
+
+      - name: Install QEMU user-mode (ARM targets)
+        if: matrix.qemu != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user qemu-user-static
+
+      - name: Install aarch64-w64-mingw32 toolchain
+        if: matrix.os == 'windows' && matrix.arch == 'aarch64'
+        run: |
+          # llvm-mingw supports aarch64-w64-mingw32
+          LLVM_MINGW_VER="20231128"
+          LLVM_MINGW_URL="https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VER}/llvm-mingw-${LLVM_MINGW_VER}-ucrt-ubuntu-20.04-x86_64.tar.xz"
+          wget -q "$LLVM_MINGW_URL" -O /tmp/llvm-mingw.tar.xz
+          sudo tar xJf /tmp/llvm-mingw.tar.xz -C /opt/
+          echo "/opt/llvm-mingw-${LLVM_MINGW_VER}-ucrt-ubuntu-20.04-x86_64/bin" >> $GITHUB_PATH
+
+      # --- Build ---
+
+      - name: Build agent
+        run: |
+          make agent-${{ matrix.os }}-${{ matrix.arch }} \
+            CC_$(echo ${{ matrix.os }} | tr '[:lower:]' '[:upper:]')_$(echo ${{ matrix.arch }} | tr '[:lower:]' '[:upper:]')=${{ matrix.cc }}
+        env:
+          CIDR_ALLOWLIST: "10.13.37.0/24"
+          EXPIRY_SECONDS: "2592000"
+          SERVER_HOST: "10.13.37.1"
+          SERVER_PORT: "443"
+
+      # --- Test (native + QEMU) ---
+
+      - name: Run TLV codec tests (native linux/amd64)
+        if: matrix.os == 'linux' && matrix.arch == 'amd64'
+        run: |
+          make test-agent
+
+      - name: Run TLV codec tests (QEMU ARM)
+        if: matrix.qemu != ''
+        run: |
+          # Build test binary with the cross-compiler
+          cd agent
+          make test CC=${{ matrix.cc }} TARGET_OS=${{ matrix.os }} TARGET_ARCH=${{ matrix.arch }}
+          # Run under QEMU user-mode
+          ${{ matrix.qemu }} -L /opt/${{ matrix.musl_cross }}/${{ matrix.musl_cross }} \
+            ./build/test_tlv
+
+      # --- Upload artifact ---
+
+      - name: Upload agent binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-${{ matrix.os }}-${{ matrix.arch }}
+          path: build/agent/${{ matrix.os }}-${{ matrix.arch }}/${{ matrix.binary }}
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # TLV codec unit tests (dedicated job for visibility)
+  # ---------------------------------------------------------------------------
+  tlv-tests:
+    name: "TLV Codec Tests"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc make
+
+      - name: Build and run TLV tests
+        run: |
+          cd agent
+          make test-tlv CC=gcc TARGET_OS=linux TARGET_ARCH=amd64
+
+      - name: Build and run safety tests
+        run: |
+          cd agent
+          make test-safety CC=gcc TARGET_OS=linux TARGET_ARCH=amd64
+
+  # ---------------------------------------------------------------------------
+  # Summary gate — all jobs must pass
+  # ---------------------------------------------------------------------------
+  ci-gate:
+    name: "CI Gate"
+    needs: [ go-build, agent-build, tlv-tests ]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check job results
+        run: |
+          if [[ "${{ needs.go-build.result }}" != "success" ]] || \
+             [[ "${{ needs.agent-build.result }}" != "success" ]] || \
+             [[ "${{ needs.tlv-tests.result }}" != "success" ]]; then
+            echo "One or more CI jobs failed."
+            exit 1
+          fi
+          echo "All CI jobs passed."

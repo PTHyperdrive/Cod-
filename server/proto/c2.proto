@@ -1,0 +1,147 @@
+// c2.proto — gRPC service definition for the C2 Team Server.
+//
+// This defines the operator-facing API used by the CLI console to
+// manage agent sessions, queue tasks, and retrieve results.
+//
+// ACADEMIC/EDUCATIONAL USE ONLY.
+
+syntax = "proto3";
+
+package c2;
+
+option go_package = "github.com/c2-framework/server/proto";
+
+// ──────────────────────────────────────────────
+//  Service
+// ──────────────────────────────────────────────
+
+// C2Service is the operator-facing gRPC API exposed by the Team Server.
+// All RPCs require mutual TLS authentication.
+service C2Service {
+  // ListSessions returns all currently tracked sessions (any state).
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+
+  // GetSession returns detailed information about a single session.
+  rpc GetSession(GetSessionRequest) returns (SessionInfo);
+
+  // QueueTask enqueues a task for delivery to an agent on its next beacon.
+  rpc QueueTask(QueueTaskRequest) returns (QueueTaskResponse);
+
+  // GetResults retrieves collected results for a given session.
+  rpc GetResults(GetResultsRequest) returns (GetResultsResponse);
+
+  // Shutdown sends a graceful shutdown command to a specific agent session.
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+
+  // BroadcastShutdown sends a shutdown command to ALL active sessions.
+  rpc BroadcastShutdown(BroadcastShutdownRequest) returns (BroadcastShutdownResponse);
+}
+
+// ──────────────────────────────────────────────
+//  Enumerations
+// ──────────────────────────────────────────────
+
+// SessionState represents the lifecycle state of an agent session.
+enum SessionState {
+  SESSION_STATE_UNSPECIFIED = 0;
+  SESSION_STATE_REGISTERED  = 1;
+  SESSION_STATE_ACTIVE      = 2;
+  SESSION_STATE_SHUTDOWN    = 3;
+}
+
+// TaskType enumerates the tasks that can be dispatched to an agent.
+enum TaskType {
+  TASK_TYPE_UNSPECIFIED = 0;
+  TASK_TYPE_EXEC       = 1;  // Execute a command
+  TASK_TYPE_UPLOAD     = 2;  // Upload a file to the agent
+  TASK_TYPE_DOWNLOAD   = 3;  // Download a file from the agent
+  TASK_TYPE_SYSINFO    = 4;  // Collect system information
+  TASK_TYPE_SLEEP      = 5;  // Change beacon interval
+  TASK_TYPE_EXIT       = 6;  // Terminate the agent
+}
+
+// ──────────────────────────────────────────────
+//  Messages — Sessions
+// ──────────────────────────────────────────────
+
+// SessionInfo carries detailed information about an agent session.
+message SessionInfo {
+  string       session_id      = 1;  // UUID (hex string)
+  string       hostname        = 2;
+  string       os              = 3;
+  string       arch            = 4;
+  SessionState state           = 5;
+  int64        registered_at   = 6;  // Unix epoch seconds
+  int64        last_seen       = 7;  // Unix epoch seconds
+  uint32       beacon_interval = 8;  // Seconds
+  uint32       jitter          = 9;  // Percentage 0-100
+  uint32       seq_number      = 10; // Last seen sequence number
+  string       remote_addr     = 11; // IP:port of the agent
+}
+
+message ListSessionsRequest {}
+
+message ListSessionsResponse {
+  repeated SessionInfo sessions = 1;
+}
+
+message GetSessionRequest {
+  string session_id = 1;
+}
+
+// ──────────────────────────────────────────────
+//  Messages — Tasks
+// ──────────────────────────────────────────────
+
+message QueueTaskRequest {
+  string   session_id = 1;
+  TaskType task_type  = 2;
+  bytes    task_data  = 3;  // Payload (command string, file bytes, etc.)
+  string   operator   = 4;  // Operator identity (from mTLS CN or explicit)
+}
+
+message QueueTaskResponse {
+  string task_id = 1;  // Server-assigned unique task identifier
+  bool   queued  = 2;
+}
+
+// ──────────────────────────────────────────────
+//  Messages — Results
+// ──────────────────────────────────────────────
+
+message TaskResult {
+  string task_id      = 1;
+  string session_id   = 2;
+  bytes  result_data  = 3;
+  string error_msg    = 4;
+  int64  received_at  = 5;  // Unix epoch seconds
+}
+
+message GetResultsRequest {
+  string session_id = 1;
+}
+
+message GetResultsResponse {
+  repeated TaskResult results = 1;
+}
+
+// ──────────────────────────────────────────────
+//  Messages — Shutdown
+// ──────────────────────────────────────────────
+
+message ShutdownRequest {
+  string session_id = 1;
+  string operator   = 2;
+}
+
+message ShutdownResponse {
+  bool success = 1;
+}
+
+message BroadcastShutdownRequest {
+  string operator = 1;
+}
+
+message BroadcastShutdownResponse {
+  uint32 sessions_notified = 1;
+}
