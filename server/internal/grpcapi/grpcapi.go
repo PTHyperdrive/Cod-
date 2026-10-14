@@ -290,7 +290,7 @@ func (s *Server) GetSession(_ context.Context, req *pb.GetSessionRequest) (*pb.S
 }
 
 // QueueTask enqueues a task for delivery to an agent on its next beacon.
-func (s *Server) QueueTask(_ context.Context, req *pb.QueueTaskRequest) (*pb.QueueTaskResponse, error) {
+func (s *Server) QueueTask(ctx context.Context, req *pb.QueueTaskRequest) (*pb.QueueTaskResponse, error) {
 	if req.SessionId == "" {
 		return nil, status.Error(codes.InvalidArgument, "session_id is required")
 	}
@@ -310,7 +310,7 @@ func (s *Server) QueueTask(_ context.Context, req *pb.QueueTaskRequest) (*pb.Que
 
 	operator := req.Operator
 	if operator == "" {
-		operator = operatorFromContext(nil)
+		operator = operatorFromContext(ctx)
 	}
 
 	taskID := sess.TaskQueue.Enqueue(tt, req.TaskData, operator)
@@ -405,10 +405,10 @@ func (s *Server) BroadcastShutdown(_ context.Context, req *pb.BroadcastShutdownR
 
 // sessionToProto converts an internal Session to a proto SessionInfo.
 func sessionToProto(sess *session.Session) *pb.SessionInfo {
-	sess_state := sess.GetState()
+	sessState := sess.GetState()
 
 	var protoState pb.SessionState
-	switch sess_state {
+	switch sessState {
 	case session.StateRegistered:
 		protoState = pb.SessionState_SESSION_STATE_REGISTERED
 	case session.StateActive:

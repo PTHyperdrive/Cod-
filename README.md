@@ -44,7 +44,7 @@ outside a controlled lab environment:
 | 4 | **No Self-Propagation** | The agent has no capability to copy itself, spread to other hosts, or download/execute secondary payloads. It is inert beyond its configured task set. |
 | 5 | **Visible by Default** | The agent runs as a normal, visible process. It does not hide from the process list, does not unhook APIs, and does not inject into other processes. It is trivially discoverable via `ps` / Task Manager. |
 | 6 | **`--lab-agent` Flag** | The agent **requires** the `--lab-agent` command-line flag to start. Without this flag it prints a safety notice and exits. This prevents accidental execution. |
-| 7 | **Kill Switch** | The Team Server can issue a `SHUTDOWN` command to any agent at any time. Additionally, the agent watches for a local kill-switch file (`/tmp/.code_killswitch` on Linux, `%TEMP%\.code_killswitch` on Windows) and exits immediately if it appears. |
+| 7 | **Kill Switch** | The Team Server can issue a `SHUTDOWN` command to any agent at any time. Additionally, the agent watches for a local kill-switch file (`/tmp/.lab-c2-stop` on Linux, `%TEMP%\.lab-c2-stop` on Windows) and exits immediately if it appears. |
 
 ---
 

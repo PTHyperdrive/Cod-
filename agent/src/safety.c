@@ -182,7 +182,20 @@ int check_sentinel_file(void)
     const char *path;
 
 #ifdef _WIN32
-    path = SENTINEL_PATH_WIN32;
+    /* Resolve %TEMP%\.lab-c2-stop at runtime so the kill switch works
+     * regardless of the actual temp directory location. */
+    static char win_path[512];
+    const char *temp = getenv("TEMP");
+    if (temp == NULL) {
+        temp = getenv("TMP");
+    }
+    if (temp != NULL) {
+        snprintf(win_path, sizeof(win_path), "%s\\.lab-c2-stop", temp);
+        path = win_path;
+    } else {
+        /* Fall back to the compile-time default. */
+        path = SENTINEL_PATH_WIN32;
+    }
 #else
     path = SENTINEL_PATH_LINUX;
 #endif
