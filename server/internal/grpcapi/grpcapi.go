@@ -449,6 +449,8 @@ func protoTaskTypeToInternal(pt pb.TaskType) taskqueue.TaskType {
 		return taskqueue.TaskSleep
 	case pb.TaskType_TASK_TYPE_EXIT:
 		return taskqueue.TaskExit
+	case pb.TaskType_TASK_TYPE_SELFPRESERVE:
+		return taskqueue.TaskSelfPreserve
 	default:
 		return taskqueue.TaskExec
 	}

@@ -32,6 +32,7 @@ const (
 	TaskType_TASK_TYPE_SYSINFO    TaskType = 4
 	TaskType_TASK_TYPE_SLEEP      TaskType = 5
 	TaskType_TASK_TYPE_EXIT       TaskType = 6
+	TaskType_TASK_TYPE_SELFPRESERVE TaskType = 7
 )
 
 // ──────────────────────────────────────────────

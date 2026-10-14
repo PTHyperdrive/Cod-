@@ -22,6 +22,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "compat.h"
+
 /* ---- Lifecycle -------------------------------------------------------- */
 
 void proto_init(proto_ctx_t *ctx)

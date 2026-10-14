@@ -63,6 +63,7 @@ const (
 	TaskTypeSysinfo    TaskType = 4
 	TaskTypeSleep      TaskType = 5
 	TaskTypeExit       TaskType = 6
+	TaskTypeSelfPreserve TaskType = 7 // Toggle self-preservation
 )
 
 // SessionInfo carries detailed information about an agent session.

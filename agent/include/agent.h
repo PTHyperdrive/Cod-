@@ -20,6 +20,7 @@ typedef struct {
     uint32_t    beacon_jitter;      /* Jitter percentage (0-100)          */
     int         lab_agent_flag;     /* Non-zero if --lab-agent was passed */
     int         running;            /* Loop control flag                  */
+    int         self_preserve;      /* Non-zero if self-preservation is on*/
 } agent_ctx_t;
 
 /* ---- Lifecycle functions ---------------------------------------------- */

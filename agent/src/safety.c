@@ -22,6 +22,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "compat.h"
+
 /* ---- IPv4 parsing ----------------------------------------------------- */
 
 int parse_ipv4(const char *ip_str, uint32_t *addr)
